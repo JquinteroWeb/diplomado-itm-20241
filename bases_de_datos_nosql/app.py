@@ -64,6 +64,4 @@ respuesta = dynamodb.create_table(
         }
     )
 
-
- #eliminar tabla  
- respuesta = dynamodb.delete_table(TableName=tabla_nombre)
+#eliminar tabla  respuesta = dynamodb.delete_table(TableName='MiNuevaTabla')  
