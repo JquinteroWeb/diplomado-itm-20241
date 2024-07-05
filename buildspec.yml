@@ -1,0 +1,37 @@
+version: 0.2
+phases:
+  install:
+    commands:
+      - echo "Install Phase - Nothing to do using latest Amazon Linux Docker Image for CodeBuild which has all AWS Tools - https://github.com/aws/aws-codebuild-docker-images/blob/master/al2/x86_64/standard/3.0/Dockerfile"
+  pre_build:
+      commands:
+        - TAG="$(date +%Y-%m-%d.%H.%M.%S).$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
+        # Verify AWS CLI Version        
+        - echo "Verify AWS CLI Version..."
+        - aws --version
+        # Login to ECR Registry for docker to push the image to ECR Repository
+        - echo "Login in to Amazon ECR..."
+        - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 590183924888.dkr.ecr.us-east-1.amazonaws.com
+        # Update Kube config Home Directory
+        - export KUBECONFIG=$HOME/.kube/config
+        - sed -i 's@CONTAINER_IMAGE@'"590183924888.dkr.ecr.us-east-1.amazonaws.com/repositorio-juan-quintero:$TAG"'@' deployment.yaml
+  build:
+    commands:
+      # Build Docker Image
+      - echo "Build started on `date`"
+      - echo "Building the Docker image..."
+      - docker build --tag 590183924888.dkr.ecr.us-east-1.amazonaws.com/repositorio-juan-quintero:$TAG .
+  post_build:
+    commands:
+      # Push Docker Image to ECR Repository
+      - echo "Envio imagen al repositorio"
+      - docker push 590183924888.dkr.ecr.us-east-1.amazonaws.com/repositorio-juan-quintero:$TAG
+      - CREDENTIALS=$(aws sts assume-role --role-arn arn:aws:iam::590183924888:role/rolparacloud9 --role-session-name codebuild-kubectl --duration-seconds 900)
+      - export AWS_ACCESS_KEY_ID="$(echo ${CREDENTIALS} | jq -r '.Credentials.AccessKeyId')"
+      - export AWS_SECRET_ACCESS_KEY="$(echo ${CREDENTIALS} | jq -r '.Credentials.SecretAccessKey')"
+      - export AWS_SESSION_TOKEN="$(echo ${CREDENTIALS} | jq -r '.Credentials.SessionToken')"
+      - export AWS_EXPIRATION=$(echo ${CREDENTIALS} | jq -r '.Credentials.Expiration')
+      - aws eks update-kubeconfig --name diplomado
+      - kubectl get pods
+      - kubectl apply -f deployment.yaml
+      - kubectl apply -f service.yaml
